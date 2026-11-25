@@ -1,0 +1,260 @@
+<title>Swimlanes Player</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+{{CSS}}
+</style>
+<style>
+/* Layout: an app, like swimlanes.io. A slim bar on top, then the editor and the player side by side
+   with a draggable divider, filling the window; the help sits below. One column on narrow screens.
+   Colours come from the --slp tokens. */
+html, body { background: var(--slp-bg); }
+body { margin: 0; color: var(--slp-fg); font: 400 14px/1.5 var(--slp-sans); }
+.app {
+  display: grid; gap: 10px;
+  padding-block: 10px 28px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-height: 40px; }
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; margin-right: auto; }
+.eyebrow { font: 500 11.5px/1.3 var(--slp-mono); letter-spacing: 0.05em; color: var(--slp-t2); white-space: nowrap; }
+h1 { margin: 0; font: 600 18px/1.25 var(--slp-sans); letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font: 500 13px/1 var(--slp-sans); color: var(--slp-fg); text-decoration: none; white-space: nowrap; background: transparent; border: 1px solid var(--slp-stroke); border-radius: 999px; cursor: pointer; }
+.btn:hover { background: var(--slp-sunk); }
+.btn.primary { color: var(--slp-on-accent); background: var(--slp-accent); border-color: var(--slp-accent); }
+.btn.primary:hover { background: var(--slp-accent-hover); }
+.btn.small { padding: 5px 12px; font-size: 12.5px; }
+.btn:focus-visible { outline: 2px solid var(--slp-accent); outline-offset: 2px; }
+
+.split {
+  --editor-w: 32%;
+  display: grid; grid-template-columns: minmax(220px, var(--editor-w)) 12px minmax(0, 1fr);
+  height: calc(100vh - 78px); height: calc(100dvh - 78px); min-height: 520px;
+}
+.split.no-editor { grid-template-columns: minmax(0, 1fr); }
+.split.no-editor .editor, .split.no-editor .gutter { display: none; }
+.editor { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+#src { flex: 1 1 auto; min-height: 0; width: 100%; box-sizing: border-box; resize: none; padding: 12px 14px; font: 400 12.5px/1.55 var(--slp-mono); color: var(--slp-fg); background: var(--slp-surface); border: 1px solid var(--slp-line); border-radius: 10px; tab-size: 2; }
+#src:focus-visible { outline: 2px solid var(--slp-accent); outline-offset: 1px; }
+.editor-foot { display: flex; align-items: center; gap: 10px; }
+#status { flex: 1; min-width: 0; margin: 0; font-size: 12.5px; color: var(--slp-muted); }
+#status.err { color: var(--slp-t2); }
+#warnings { margin: 0; padding-left: 18px; display: grid; gap: 4px; max-height: 28%; overflow: auto; font-size: 12.5px; color: var(--slp-t5); }
+.gutter { display: flex; justify-content: center; cursor: col-resize; touch-action: none; }
+.gutter::before { content: ""; width: 2px; height: 100%; border-radius: 2px; background: var(--slp-line); transition: background-color 0.15s; }
+.gutter:hover::before, .gutter.dragging::before, .gutter:focus-visible::before { background: var(--slp-accent); }
+.gutter:focus-visible { outline: none; }
+.player { min-width: 0; min-height: 0; box-sizing: border-box; padding: 12px 14px; background: var(--slp-surface); border: 1px solid var(--slp-line); border-radius: 12px; }
+
+.help { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px 28px; padding: 16px 18px; font-size: 13px; line-height: 1.5; background: var(--slp-surface); border: 1px solid var(--slp-line); border-radius: 12px; }
+.help h2 { margin: 0 0 6px; font: 600 12px/1.3 var(--slp-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--slp-muted); }
+.help p { margin: 0; }
+.help ul { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
+.help code { padding: 1px 5px; font: 400 12px var(--slp-mono); background: var(--slp-sunk); border-radius: 5px; white-space: nowrap; }
+
+@media (max-width: 860px) {
+  .split, .split.no-editor { display: flex; flex-direction: column; gap: 10px; height: auto; min-height: 0; }
+  .gutter { display: none; }
+  #src { flex: none; height: 240px; resize: vertical; }
+  .player { height: 80vh; height: 80dvh; }
+  h1 { font-size: 16px; }
+}
+</style>
+
+<script>
+  // Apply a saved theme before the page paints, so it doesn't flash the other theme.
+  try { const t = localStorage.getItem("swimlanes-player:theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) { /* storage may be off */ }
+</script>
+
+<main class="app">
+  <header class="bar">
+    <div class="brand">
+      <span class="eyebrow">swimlanes.io player</span>
+      <h1 id="title">Swimlanes Player</h1>
+    </div>
+    <a class="btn" id="open-sl" href="https://swimlanes.io/" target="_blank" rel="noopener">Open in swimlanes.io</a>
+    <button type="button" class="btn" id="btn-copy">Copy swimlanes.io link</button>
+    <button type="button" class="btn" id="btn-theme" title="Switch the colour theme: Auto follows your system">Theme: Auto</button>
+    <button type="button" class="btn" id="btn-editor" aria-pressed="false" aria-controls="editor-pane">Hide editor</button>
+  </header>
+
+  <div class="split" id="split">
+    <section class="editor" id="editor-pane" aria-label="Diagram source">
+      <textarea id="src" spellcheck="false" aria-label="swimlanes.io text or link" placeholder="Paste a https://swimlanes.io/#… link, or type a diagram:&#10;&#10;title: Example&#10;autonumber&#10;Alice -> Bob: Hello&#10;// explain: Alice greets Bob.&#10;Bob -->> Alice: Hi"></textarea>
+      <div class="editor-foot">
+        <p id="status" role="status"></p>
+        <button type="button" class="btn primary small" id="btn-load">Load</button>
+      </div>
+      <ul id="warnings" hidden></ul>
+    </section>
+    <div class="gutter" id="gutter" role="separator" aria-orientation="vertical" aria-controls="editor-pane" aria-label="Resize the editor" tabindex="0" title="Drag to resize; double-click to reset"></div>
+    <section class="player" id="player" aria-label="Player"></section>
+  </div>
+
+  <section class="help" aria-label="Help">
+    <div>
+      <h2>Load</h2>
+      <p>Paste a <code>https://swimlanes.io/#…</code> link, or only the part after <code>#</code>, into the editor. The player unpacks it into text you can edit, and redraws as you type. <b>Open in swimlanes.io</b> and <b>Copy swimlanes.io link</b> turn your text back into a link. Opened from a file, <code>swimlanes-player.html#…</code> loads that link at start.</p>
+    </div>
+    <div>
+      <h2>swimlanes.io syntax</h2>
+      <ul>
+        <li><code>A -&gt; B: text</code>, also <code>--&gt;</code> <code>-&gt;&gt;</code> <code>-x</code> <code>&lt;-&gt;</code> <code>=&gt;</code>, <code>B &lt;- A</code>, and <code>-&gt;&lt;</code> for an automatic reply; the <code>:</code> is required</li>
+        <li><code>note A, B: text</code> or <code>todo: text</code>; the lines below it continue it</li>
+        <li><code>_:</code> <code>-:</code> <code>--:</code> <code>=:</code> dividers, <code>...: text</code> delay</li>
+        <li><code>if:</code> <code>else:</code> <code>group:</code> <code>end</code></li>
+        <li><code>title:</code> <code>autonumber</code> <code>alias A: Name</code> <code>// comment</code> <code># comment</code></li>
+        <li><code>order: A, B</code> puts A and B first, then the rest</li>
+        <li>Lane names ignore case and keep their first spelling</li>
+        <li><code>**bold**</code> <code>_italic_</code> <code>~~strike~~</code> <code>`code`</code></li>
+      </ul>
+    </div>
+    <div>
+      <h2>Player lines and keys</h2>
+      <ul>
+        <li><code>// explain: text</code> explains the message above</li>
+        <li><code>// state Lane: text</code> sets what a lane holds after the message above</li>
+        <li><code>// phase: name</code> starts a phase; dividers make phases too</li>
+        <li>swimlanes.io ignores these lines, so the diagram stays valid there</li>
+        <li>Click a row or its number to jump to it; ← → step, space plays, F full screen</li>
+        <li>Drag the divider to resize the editor; double-click it to reset</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<script>
+{{JS}}
+</script>
+<script>
+(function () {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const src = $("src"), status = $("status"), warnings = $("warnings"), openSl = $("open-sl");
+  const split = $("split"), gutter = $("gutter"), editorPane = $("editor-pane"), toggle = $("btn-editor");
+  const KEY = "swimlanes-player:src", W_KEY = "swimlanes-player:editor-width", HIDE_KEY = "swimlanes-player:editor-hidden";
+  const get = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const set = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* storage may be off */ } };
+  const player = SwimlanesPlayer.mount($("player"), { fill: true });
+  const say = (msg, err) => { status.textContent = msg; status.className = err ? "err" : ""; };
+
+  async function refreshLink(text) {
+    try {
+      const url = await SwimlanesPlayer.toUrl(text);
+      openSl.href = url;
+      openSl.dataset.url = url;
+    } catch (e) {
+      openSl.href = "https://swimlanes.io/";
+      delete openSl.dataset.url;
+    }
+  }
+
+  function play(text, keepStep) {
+    const model = player.load(text, keepStep);
+    $("title").textContent = model.title || "Swimlanes Player";
+    warnings.innerHTML = model.warnings.map(w => `<li>${esc(w)}</li>`).join("");
+    warnings.hidden = !model.warnings.length;
+    say(`${model.total} messages across ${model.lanes.length} lanes.`);
+    set(KEY, text);
+    refreshLink(text);
+  }
+
+  async function unpack(value) {
+    try {
+      const text = await SwimlanesPlayer.decode(value);
+      src.value = text;
+      play(text, false);
+      say(`Unpacked the link: ${player.model.total} messages across ${player.model.lanes.length} lanes.`);
+    } catch (e) {
+      say(e.message, true);
+    }
+  }
+
+  let timer = null;
+  src.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (!SwimlanesPlayer.isLink(src.value)) play(src.value, true); }, 450);
+  });
+  src.addEventListener("paste", e => {
+    const pasted = e.clipboardData && e.clipboardData.getData("text");
+    if (pasted && SwimlanesPlayer.isLink(pasted)) { e.preventDefault(); unpack(pasted); }
+  });
+  $("btn-load").addEventListener("click", () => {
+    if (SwimlanesPlayer.isLink(src.value)) unpack(src.value); else play(src.value, false);
+  });
+  $("btn-copy").addEventListener("click", async () => {
+    let url = openSl.dataset.url;
+    try { if (!url) url = await SwimlanesPlayer.toUrl(src.value); } catch (e) { say(e.message, true); return; }
+    try { await navigator.clipboard.writeText(url); say("Copied the swimlanes.io link."); }
+    catch (e) { say("This page cannot copy here. Use “Open in swimlanes.io” and copy the address there."); }
+  });
+
+  // Editor width: drag the divider, use ← → on it, or double-click it to reset.
+  function setWidth(px) {
+    const w = Math.max(220, Math.min(split.clientWidth - 380, px));
+    split.style.setProperty("--editor-w", w + "px");
+    return w;
+  }
+  const savedWidth = Number(get(W_KEY));
+  if (savedWidth > 0) setWidth(savedWidth);
+  gutter.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    gutter.setPointerCapture(e.pointerId);
+    gutter.classList.add("dragging");
+    const left = split.getBoundingClientRect().left;
+    const move = ev => setWidth(ev.clientX - left);
+    const up = () => {
+      gutter.classList.remove("dragging");
+      gutter.removeEventListener("pointermove", move);
+      gutter.removeEventListener("pointerup", up);
+      gutter.removeEventListener("pointercancel", up);
+      set(W_KEY, String(Math.round(editorPane.getBoundingClientRect().width)));
+    };
+    gutter.addEventListener("pointermove", move);
+    gutter.addEventListener("pointerup", up);
+    gutter.addEventListener("pointercancel", up);
+  });
+  gutter.addEventListener("keydown", e => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    e.stopPropagation();
+    const w = setWidth(editorPane.getBoundingClientRect().width + (e.key === "ArrowLeft" ? -24 : 24));
+    set(W_KEY, String(Math.round(w)));
+  });
+  gutter.addEventListener("dblclick", () => { split.style.removeProperty("--editor-w"); set(W_KEY, ""); });
+  window.addEventListener("resize", () => {
+    const w = parseFloat(split.style.getPropertyValue("--editor-w"));
+    if (w) setWidth(w);
+  });
+
+  function showEditor(on) {
+    split.classList.toggle("no-editor", !on);
+    toggle.textContent = on ? "Hide editor" : "Show editor";
+    toggle.setAttribute("aria-pressed", String(!on));
+    set(HIDE_KEY, on ? "" : "1");
+  }
+  toggle.addEventListener("click", () => showEditor(split.classList.contains("no-editor")));
+  showEditor(get(HIDE_KEY) !== "1");
+
+  // Theme: Auto (the system setting) → Light → Dark.
+  const THEME_KEY = "swimlanes-player:theme", THEMES = ["auto", "light", "dark"], themeBtn = $("btn-theme");
+  function applyTheme(theme) {
+    if (theme === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme;
+    const name = theme.charAt(0).toUpperCase() + theme.slice(1);
+    themeBtn.textContent = `Theme: ${name}`;
+    themeBtn.setAttribute("aria-label", `Colour theme: ${name}. Press to switch.`);
+    set(THEME_KEY, theme === "auto" ? "" : theme);
+  }
+  themeBtn.addEventListener("click", () => {
+    const now = document.documentElement.dataset.theme || "auto";
+    applyTheme(THEMES[(THEMES.indexOf(now) + 1) % THEMES.length]);
+  });
+  applyTheme(THEMES.includes(get(THEME_KEY)) ? get(THEME_KEY) : "auto");
+
+  const hash = decodeURIComponent(location.hash.slice(1));
+  if (hash.length > 24) unpack(hash);
+  else { src.value = get(KEY) || ""; play(src.value, false); }
+})();
+</script>
