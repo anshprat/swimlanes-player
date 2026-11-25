@@ -4,6 +4,11 @@ Plays a [swimlanes.io](https://swimlanes.io) sequence diagram one message at a t
 one arrow, and a card on top of each lane shows what that lane holds after the step. No
 dependencies, no build needed to use it, and it works offline.
 
+Live: https://anshprat.github.io/swimlanes-player/
+
+`https://anshprat.github.io/swimlanes-player/#<payload>` opens a swimlanes.io link's diagram directly:
+use the part of the swimlanes.io link after `#` as the payload.
+
 ## Use it
 
 1. Open `dist/swimlanes-player.html` in a browser.
