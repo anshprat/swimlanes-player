@@ -1,2 +1,114 @@
 # swimlanes-player
-Play a swimlanes.io sequence diagram one message at a time, with lane state cards. Paste text or a swimlanes.io link.
+
+Plays a [swimlanes.io](https://swimlanes.io) sequence diagram one message at a time. Each step draws
+one arrow, and a card on top of each lane shows what that lane holds after the step. No
+dependencies, no build needed to use it, and it works offline.
+
+## Use it
+
+1. Open `dist/swimlanes-player.html` in a browser.
+2. Paste swimlanes.io text, or a swimlanes.io link (`https://swimlanes.io/#…`, or only the part after `#`),
+   into the editor on the left. A link is unpacked into text that you can edit. As on swimlanes.io, the
+   editor and the player sit side by side; drag the divider to resize them, or hide the editor.
+3. Press **Next**, **Play**, or the → key.
+
+Click a row or its number to jump to that step. **Full screen** (or the F key) gives the player the
+whole screen; where a page may not use the browser's full screen (some embeds, phones), the player covers
+the window instead. Esc leaves either.
+
+**Theme** switches between Auto (your system setting), Light and Dark, and is remembered.
+
+Edits redraw the player while you type. **Open in swimlanes.io** and **Copy swimlanes.io link** turn
+the current text back into a swimlanes.io link, so you can edit in either place.
+
+To open a diagram straight from a link, add its payload to the file's address:
+`dist/swimlanes-player.html#vVNNb4JA…`.
+
+## Player lines
+
+swimlanes.io ignores `//` lines, so these annotations keep the diagram valid there:
+
+| Line | Effect |
+|---|---|
+| `// explain: text` | Explains the message above it, in the step card |
+| `// state Lane: text` | Sets what `Lane` holds after the message above it, in the lane card |
+| `// phase: name` | Starts a phase with the next message; phases become jump buttons |
+
+Dividers (`_:`, `-:`, `--:`, `=:`) also become phase buttons. A `// explain:` above the first message
+is the intro text. Without `// state` lines, each lane card shows the last message that touched it.
+
+```text
+title: Release flow
+autonumber
+// phase: Release
+Dev -> Main: PR merges
+// explain: A pull request merges into Main.
+// state Main: v1.2.0
+Main -> QA: Promote v1.2.0
+// state QA: v1.2.0
+QA -->> Prod: Approved
+```
+
+## Supported swimlanes.io syntax
+
+The parser follows the parser in swimlanes.io's public web client: the same patterns, tested in the
+same order, with the same rules for lanes, `order:`, notes and errors. A diagram therefore plays with
+the lanes and steps that swimlanes.io draws.
+
+- Messages: `A -> B: text`. The `:` is required. Lines `-` (solid), `--` (dashed), `=` (bold); heads
+  `>` and `<` (closed), `>>` and `<<` (open), `x` (lost), on either end (`B <- A`, `A <-> B`);
+  `A -> A` to self; `A -><  B: text` adds an automatic reply from B to A
+- Notes: `note: text`, `note A: text`, `note A, B: text`, and `todo:` for a to-do note. The lines below
+  a note continue it until the next element. A note without lanes spans the element above it; a note on
+  an unknown lane spans every lane
+- Dividers `_:` `-:` `--:` `=:`, delay `...: text`, sections `if:` or `group:`, then `else:` and `end`
+- `title:` (the first one counts), `name:`, `autonumber`, `alias A: Shown name`, comments `//` and `#`
+- `order: A, B`: `A` and `B` become the first lanes, in that order; the others follow in the order they
+  first appear. Only the first valid `order:` line counts
+- Lane names ignore case and keep their first spelling: `PROD` and `Prod` are one lane, shown as
+  whichever comes first
+- Inline `**bold**`, `_italic_` or `*italic*`, `~~strike~~`, `` `code` ``, `[links](https://…)`;
+  `{fa-…}` icons are dropped
+
+A line that swimlanes.io would show as an error is listed under the editor, with its line number.
+
+## Embed the player
+
+```html
+<link rel="stylesheet" href="swimlanes-player.css">
+<script src="swimlanes-player.js"></script>
+<div id="player"></div>
+<script>
+  const player = SwimlanesPlayer.mount(document.getElementById("player"));
+  SwimlanesPlayer.decode(location.hash).then(text => player.load(text));
+</script>
+```
+
+API (global `SwimlanesPlayer`):
+
+| Call | Returns |
+|---|---|
+| `decode(input)` | `Promise<string>`: diagram text from a swimlanes.io URL, `#hash` or payload; plain text passes through |
+| `encode(text)` / `toUrl(text)` | `Promise<string>`: the payload / the full `https://swimlanes.io/#…` URL |
+| `isLink(input)` | `true` when `input` is a link or payload |
+| `parse(text)` | The model: `title`, `lanes`, `rows`, `states`, `total`, `warnings` |
+| `mount(element, { ghost, speed, colorBy, fill })` (`fill: true` makes the player fill its container's height) | A player: `load(text, keepStep)`, `go(n)`, `play()`, `pause()`, `fullscreen(on)`, `on("step" \| "load" \| "fullscreen", fn)`, `model`, `step` |
+
+A swimlanes.io link is the diagram text, compressed with raw DEFLATE and encoded as base64.
+The player uses the browser's `DecompressionStream("deflate-raw")` and `CompressionStream("deflate-raw")`.
+
+## Build
+
+```sh
+node build.mjs
+```
+
+It writes `dist/swimlanes-player.html`, one self-contained page with `swimlanes-player.css` and
+`swimlanes-player.js` inlined. `src/shell.html` is the page around the player. The built file is
+committed, so the page works straight from a clone.
+
+## Credits
+
+The diagram syntax and the link format are [swimlanes.io](https://swimlanes.io)'s. This project is not
+affiliated with swimlanes.io; it reads and writes swimlanes.io links so that you can move a diagram
+between the two.
