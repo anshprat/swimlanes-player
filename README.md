@@ -69,7 +69,9 @@ the lanes and steps that swimlanes.io draws.
   a note continue it until the next element. A note without lanes spans the element above it; a note on
   an unknown lane spans every lane
 - Dividers `_:` `-:` `--:` `=:`, delay `...: text`, sections `if:` or `group:`, then `else:` and `end`
-- `title:` (the first one counts), `name:`, `autonumber`, `alias A: Shown name`, comments `//` and `#`
+- `title:` (the first one counts), `name:`, `alias A: Shown name`, comments `//` and `#`
+- `autonumber` (anywhere in the diagram) writes `[n] ` before each message's label, as swimlanes.io does.
+  The step badges show the step numbers with or without it
 - `order: A, B`: `A` and `B` become the first lanes, in that order; the others follow in the order they
   first appear. Only the first valid `order:` line counts
 - Lane names ignore case and keep their first spelling: `PROD` and `Prod` are one lane, shown as

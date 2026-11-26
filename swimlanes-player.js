@@ -608,6 +608,12 @@
     return "slp-ln" + (r.line === "--" || r.line === "==" ? " slp-dash" : "") + (r.line === "=" || r.line === "==" ? " slp-bold" : "");
   }
 
+  // A message's label as drawn by draw(): swimlanes.io's autonumber writes "[n] " before each message.
+  function numbered(model, r, draw) {
+    const text = r.label ? draw(r.label) : "";
+    return model.autonumber ? `[${r.n}]` + (text ? " " + text : "") : text;
+  }
+
   function msgSvg(model, L, r, state, colorBy) {
     const y = r._y;
     const x1 = L.xs[r.from], x2 = L.xs[r.to];
@@ -619,7 +625,7 @@
       const top = y - 10, bot = y + 14;
       body = `<g class="slp-ln-wrap" style="transform-origin:${x1}px ${y}px"><path class="${lineClass(r)}" d="M${x1} ${top}H${x1 + 44}V${bot}H${x1 + (r.endHead === ">" ? 10 : 2)}" fill="none"/></g>` +
         `<g class="slp-hd-wrap">${head(x1, bot, -1, r.endHead)}${r.startHead ? head(x1, top, -1, r.startHead) : ""}</g>` +
-        `<text class="slp-lbl" x="${x1 + 54}" y="${y + 6}">${svgText(r.label)}</text>`;
+        `<text class="slp-lbl" x="${x1 + 54}" y="${y + 6}">${numbered(model, r, svgText)}</text>`;
     } else {
       const d = Math.sign(x2 - x1);
       const lost = r.endHead === "x";
@@ -628,7 +634,7 @@
       const xh = lost ? xe : x2;
       body = `<g class="slp-ln-wrap" style="transform-origin:${x1}px ${y}px"><line class="${lineClass(r)}" x1="${xs}" y1="${y}" x2="${xe}" y2="${y}"/></g>` +
         `<g class="slp-hd-wrap">${head(xh, y, d, r.endHead)}${r.startHead ? head(x1, y, -d, r.startHead) : ""}</g>` +
-        `<text class="slp-lbl" x="${(x1 + x2) / 2}" y="${y - 10}" text-anchor="middle">${svgText(r.label)}</text>` +
+        `<text class="slp-lbl" x="${(x1 + x2) / 2}" y="${y - 10}" text-anchor="middle">${numbered(model, r, svgText)}</text>` +
         (cur ? `<circle class="slp-pkt" cx="${x1}" cy="${y}" r="5" style="--slp-dx:${(lost ? xe : x2) - x1}px"/>` : "");
     }
     return `<g class="slp-msg slp-${state} ${color}" data-n="${r.n}" data-row="${r.idx}" tabindex="0" role="button" aria-label="Go to step ${r.n}${r.label ? ": " + esc(plain(r.label)) : ""}">` +
@@ -783,7 +789,7 @@
         el.querySelector(".slp-lh-state").hidden = !st;
         const last = lastBy[k];
         el.querySelector(".slp-lh-last").innerHTML = last
-          ? `${last.dir} ${last.r.self ? "self" : iconHtml(model.laneByKey.get(last.other).name)}: ${vlen(last.r.label) ? htmlText(last.r.label) : "(no label)"}`
+          ? `${last.dir} ${last.r.self ? "self" : iconHtml(model.laneByKey.get(last.other).name)}: ${vlen(last.r.label) || model.autonumber ? numbered(model, last.r, htmlText) : "(no label)"}`
           : "no messages yet";
         el.classList.toggle("slp-act", !!cur && (cur.from === k || cur.to === k));
         el.classList.toggle("slp-chg", changed.has(k));
@@ -808,7 +814,7 @@
       ui.arrow.innerHTML = `<span class="slp-chip slp-c${from.i % 9}">${iconHtml(from.name)}</span>` +
         (r.self ? "" : `<span class="slp-to">${r.startHead ? "↔" : "→"}</span><span class="slp-chip slp-c${to.i % 9}">${iconHtml(to.name)}</span>`) +
         `<span class="slp-kind"><code>${esc(r.op)}</code> ${style}</span>`;
-      ui.label.innerHTML = r.label ? `“${htmlText(r.label)}”` : `<span class="slp-muted">(no label)</span>`;
+      ui.label.innerHTML = r.label || model.autonumber ? `“${numbered(model, r, htmlText)}”` : `<span class="slp-muted">(no label)</span>`;
       ui.explain.innerHTML = r.explain ? htmlText(r.explain) : `<span class="slp-muted">No explanation. Add <code>// explain: …</code> under this message.</span>`;
     }
 
@@ -1005,5 +1011,5 @@
     };
   }
 
-  global.SwimlanesPlayer = { decode, encode, toUrl, isLink, parse, mount, iconHtml, version: "1.2.0" };
+  global.SwimlanesPlayer = { decode, encode, toUrl, isLink, parse, mount, iconHtml, version: "1.2.1" };
 })(typeof window !== "undefined" ? window : globalThis);
