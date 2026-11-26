@@ -17,7 +17,9 @@ use the part of the swimlanes.io link after `#` as the payload.
    editor and the player sit side by side; drag the divider to resize them, or hide the editor.
 3. Press **Next**, **Play**, or the → key.
 
-Click a row or its number to jump to that step. **Full screen** (or the F key) gives the player the
+Click a row or its number to jump to that step. As on swimlanes.io, the editor and the player mark the same
+line: move the caret in the editor to mark that line's row in the player, or click a row (or step to it) to
+mark its line in the editor. **Full screen** (or the F key) gives the player the
 whole screen; where a page may not use the browser's full screen (some embeds, phones), the player covers
 the window instead. Esc leaves either.
 
@@ -72,8 +74,21 @@ the lanes and steps that swimlanes.io draws.
   first appear. Only the first valid `order:` line counts
 - Lane names ignore case and keep their first spelling: `PROD` and `Prod` are one lane, shown as
   whichever comes first
-- Inline `**bold**`, `_italic_` or `*italic*`, `~~strike~~`, `` `code` ``, `[links](https://…)`;
-  `{fa-…}` icons are dropped
+- Inline `**bold**`, `_italic_` or `*italic*`, `~~strike~~`, `` `code` ``, `[links](https://…)`
+- Font Awesome icons: `{fas-user}` (solid), `{far-bell}` (regular), `{fab-github}` (brands), `{fa-user}`,
+  with `fa-xs`, `fa-sm`, `fa-lg`, `fa-xl`, `fa-2x` (larger sizes draw at 2x) and `fa-fw`. They work in the
+  title, lane names and aliases, messages, notes, dividers and sections, as on swimlanes.io
+
+### Icons
+
+swimlanes.io draws icons with Font Awesome Pro 5. The player uses Font Awesome Free 6.7.2, which keeps the
+version 5 names. It loads the stylesheet from cdnjs only when a diagram has an icon; offline, the player
+leaves the icons out and says so under the editor.
+
+- Free has no light (`fal`) or duotone (`fad`) icons: light draws as regular, duotone as solid.
+- A regular icon that Free has only as solid (for example `{far-hippo}`) draws as solid.
+- A Pro-only icon (for example `{fas-duck}`) draws as a muted question mark, with a warning under the editor.
+- Inside a code block in a note, `{fa…}` stays text, as on swimlanes.io.
 
 A line that swimlanes.io would show as an error is listed under the editor, with its line number.
 
@@ -96,8 +111,13 @@ API (global `SwimlanesPlayer`):
 | `decode(input)` | `Promise<string>`: diagram text from a swimlanes.io URL, `#hash` or payload; plain text passes through |
 | `encode(text)` / `toUrl(text)` | `Promise<string>`: the payload / the full `https://swimlanes.io/#…` URL |
 | `isLink(input)` | `true` when `input` is a link or payload |
-| `parse(text)` | The model: `title`, `lanes`, `rows`, `states`, `total`, `warnings` |
-| `mount(element, { ghost, speed, colorBy, fill })` (`fill: true` makes the player fill its container's height) | A player: `load(text, keepStep)`, `go(n)`, `play()`, `pause()`, `fullscreen(on)`, `on("step" \| "load" \| "fullscreen", fn)`, `model`, `step` |
+| `parse(text)` | The model: `title`, `lanes`, `rows` (each with its `srcLine`), `rowByLine`, `states`, `icons`, `total`, `warnings` |
+| `mount(element, { ghost, speed, colorBy, fill, icons })` (`fill: true` makes the player fill its container's height; `icons` is the Font Awesome stylesheet URL, or `false` to load none) | A player: `load(text, keepStep)`, `go(n)`, `select(line)`, `play()`, `pause()`, `fullscreen(on)`, `on("step" \| "load" \| "select" \| "icons" \| "fullscreen", fn)`, `model`, `step` |
+| `iconHtml(text)` | HTML of `text` with its `{fa-…}` icons drawn and the rest escaped (for a title outside the player) |
+
+`select(line)` marks the row that owns a source line (0-based), as an editor's caret does. The `"select"`
+event gives the source line of the row that a click or a step marked, or `null`. The `"icons"` event fires
+when a diagram's icons have loaded, so a page can redraw a title or warnings it drew from the model.
 
 A swimlanes.io link is the diagram text, compressed with raw DEFLATE and encoded as base64.
 The player uses the browser's `DecompressionStream("deflate-raw")` and `CompressionStream("deflate-raw")`.
