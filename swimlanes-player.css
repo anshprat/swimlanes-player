@@ -111,14 +111,18 @@
 .slp-svg text { font-family: var(--slp-sans); }
 .slp-life { stroke: var(--slp-lc); stroke-width: 1.5; stroke-dasharray: 3 5; opacity: 0.45; }
 .slp-msg { --slp-kc: var(--slp-lc); }
-.slp-svg [data-n], .slp-svg [data-go] { cursor: pointer; }
+.slp-svg [data-row] { cursor: pointer; }
 .slp-hit { fill: transparent; }
 .slp-msg:hover .slp-hit { fill: color-mix(in srgb, var(--slp-kc) 8%, transparent); }
 .slp-msg:hover .slp-badge { stroke-width: 3; }
 .slp-msg:focus { outline: none; }
 .slp-msg:focus-visible .slp-hit { fill: color-mix(in srgb, var(--slp-accent) 9%, transparent); }
 .slp-msg:focus-visible .slp-badge { stroke: var(--slp-accent); stroke-width: 3.5; }
-.slp-div[data-go]:hover rect { stroke: var(--slp-accent); }
+.slp-div[data-row]:hover rect { stroke: var(--slp-accent); }
+/* The chosen row that is not the current message: a note, divider or section picked in the player or editor. */
+.slp-note.slp-focus rect, .slp-div.slp-focus rect { stroke: var(--slp-accent); stroke-width: 2; }
+.slp-div.slp-focus line, .slp-else.slp-focus line { stroke: var(--slp-accent); }
+.slp-block.slp-focus .slp-frame, .slp-block.slp-focus .slp-tab { stroke: var(--slp-accent); stroke-width: 2; }
 .slp-ln { stroke: var(--slp-kc); stroke-width: 2; fill: none; }
 .slp-ln.slp-dash { stroke-dasharray: 7 5; }
 .slp-ln.slp-bold { stroke-width: 3.5; }
@@ -155,6 +159,12 @@
 .slp-else line { stroke: var(--slp-stroke); stroke-dasharray: 6 5; }
 .slp-else text { font: 600 12px var(--slp-mono); fill: var(--slp-muted); }
 .slp-foot { margin: 0; color: var(--slp-muted); font-size: 12.5px; }
+
+/* Font Awesome icons ({fas-user}): glyphs of the Font Awesome font, in HTML and in SVG text. The script
+   sets the font. A question mark stands in for an icon that Font Awesome Free does not have. */
+.slp-fa { font-style: normal; font-variant: normal; line-height: 1; text-rendering: auto; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+.slp-fa-fw { display: inline-block; width: 1.25em; text-align: center; }
+.slp-fa-missing { color: var(--slp-muted); fill: var(--slp-muted); }
 
 /* Fill (mount option fill: true): the player takes its container's height, as in an app layout. */
 .slp.slp-fill { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; box-sizing: border-box; }

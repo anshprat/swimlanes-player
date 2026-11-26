@@ -34,7 +34,11 @@ h1 { margin: 0; font: 600 18px/1.25 var(--slp-sans); letter-spacing: -0.01em; ov
 .split.no-editor { grid-template-columns: minmax(0, 1fr); }
 .split.no-editor .editor, .split.no-editor .gutter { display: none; }
 .editor { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
-#src { flex: 1 1 auto; min-height: 0; width: 100%; box-sizing: border-box; resize: none; padding: 12px 14px; font: 400 12.5px/1.55 var(--slp-mono); color: var(--slp-fg); background: var(--slp-surface); border: 1px solid var(--slp-line); border-radius: 10px; tab-size: 2; }
+/* The editor: a textarea over a band that marks the chosen line, as swimlanes.io marks it. */
+.src-box { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; background: var(--slp-surface); border-radius: 10px; }
+#src { position: relative; flex: 1 1 auto; min-height: 0; width: 100%; box-sizing: border-box; resize: none; padding: 12px 14px; font: 400 12.5px/1.55 var(--slp-mono); color: var(--slp-fg); background: transparent; border: 1px solid var(--slp-line); border-radius: 10px; tab-size: 2; }
+.src-hl { position: absolute; top: 0; left: 1px; right: 1px; pointer-events: none; background: color-mix(in srgb, var(--slp-accent) 11%, transparent); box-shadow: inset 3px 0 0 var(--slp-accent); }
+.src-mirror { position: absolute; top: 0; left: 0; visibility: hidden; pointer-events: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
 #src:focus-visible { outline: 2px solid var(--slp-accent); outline-offset: 1px; }
 .editor-foot { display: flex; align-items: center; gap: 10px; }
 #status { flex: 1; min-width: 0; margin: 0; font-size: 12.5px; color: var(--slp-muted); }
@@ -55,6 +59,7 @@ h1 { margin: 0; font: 600 18px/1.25 var(--slp-sans); letter-spacing: -0.01em; ov
 @media (max-width: 860px) {
   .split, .split.no-editor { display: flex; flex-direction: column; gap: 10px; height: auto; min-height: 0; }
   .gutter { display: none; }
+  .src-box { flex: none; }
   #src { flex: none; height: 240px; resize: vertical; }
   .player { height: 80vh; height: 80dvh; }
   h1 { font-size: 16px; }
@@ -80,7 +85,7 @@ h1 { margin: 0; font: 600 18px/1.25 var(--slp-sans); letter-spacing: -0.01em; ov
 
   <div class="split" id="split">
     <section class="editor" id="editor-pane" aria-label="Diagram source">
-      <textarea id="src" spellcheck="false" aria-label="swimlanes.io text or link" placeholder="Paste a https://swimlanes.io/#… link, or type a diagram:&#10;&#10;title: Example&#10;autonumber&#10;Alice -> Bob: Hello&#10;// explain: Alice greets Bob.&#10;Bob -->> Alice: Hi"></textarea>
+      <div class="src-box"><div class="src-hl" id="src-hl" hidden></div><textarea id="src" spellcheck="false" aria-label="swimlanes.io text or link" placeholder="Paste a https://swimlanes.io/#… link, or type a diagram:&#10;&#10;title: Example&#10;autonumber&#10;Alice -> Bob: Hello&#10;// explain: Alice greets Bob.&#10;Bob -->> Alice: Hi"></textarea></div>
       <div class="editor-foot">
         <p id="status" role="status"></p>
         <button type="button" class="btn primary small" id="btn-load">Load</button>
@@ -107,6 +112,7 @@ h1 { margin: 0; font: 600 18px/1.25 var(--slp-sans); letter-spacing: -0.01em; ov
         <li><code>order: A, B</code> puts A and B first, then the rest</li>
         <li>Lane names ignore case and keep their first spelling</li>
         <li><code>**bold**</code> <code>_italic_</code> <code>~~strike~~</code> <code>`code`</code></li>
+        <li><code>{fas-user}</code> <code>{far-bell fa-lg}</code> <code>{fab-github}</code> Font Awesome icons, loaded from cdnjs when a diagram has one</li>
       </ul>
     </div>
     <div>
@@ -117,6 +123,7 @@ h1 { margin: 0; font: 600 18px/1.25 var(--slp-sans); letter-spacing: -0.01em; ov
         <li><code>// phase: name</code> starts a phase; dividers make phases too</li>
         <li>swimlanes.io ignores these lines, so the diagram stays valid there</li>
         <li>Click a row or its number to jump to it; ← → step, space plays, F full screen</li>
+        <li>The editor and the player mark the same line: move the caret, or click a row</li>
         <li>Drag the divider to resize the editor; double-click it to reset</li>
       </ul>
     </div>
@@ -150,11 +157,81 @@ h1 { margin: 0; font: 600 18px/1.25 var(--slp-sans); letter-spacing: -0.01em; ov
     }
   }
 
-  function play(text, keepStep) {
-    const model = player.load(text, keepStep);
-    $("title").textContent = model.title || "Swimlanes Player";
+  // The title and the warnings; drawn again when the diagram's icons have loaded.
+  function show(model) {
+    $("title").innerHTML = model.title ? SwimlanesPlayer.iconHtml(model.title) : "Swimlanes Player";
     warnings.innerHTML = model.warnings.map(w => `<li>${esc(w)}</li>`).join("");
     warnings.hidden = !model.warnings.length;
+  }
+  player.on("icons", show);
+
+  // The chosen line, kept the same in the editor and the player, as on swimlanes.io: a caret move in the
+  // editor chooses the row of its line, and a row picked (or a step taken) in the player moves the caret.
+  const band = $("src-hl"), mirror = document.createElement("div");
+  mirror.className = "src-mirror";
+  mirror.setAttribute("aria-hidden", "true");
+  src.parentNode.appendChild(mirror);
+  let hlLine = null, hlTop = 0, hlHeight = 0, hlShown = false, dirty = false;
+  const caretLine = () => src.value.slice(0, src.selectionStart).split("\n").length - 1;
+  const lineStart = line => src.value.split("\n").slice(0, line).reduce((n, l) => n + l.length + 1, 0);
+
+  // Lay the text out as the textarea does, to find where the chosen line sits and how tall it wraps.
+  function measure() {
+    if (hlLine === null || !src.offsetParent) return false;
+    const cs = getComputedStyle(src);
+    ["font", "letterSpacing", "wordSpacing", "tabSize", "textTransform", "textIndent", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+      "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "borderStyle"].forEach(k => { mirror.style[k] = cs[k]; });
+    mirror.style.boxSizing = "content-box";
+    mirror.style.width = (src.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) + "px";
+    mirror.replaceChildren(...src.value.split("\n").slice(0, hlLine + 1).map(text => {
+      const div = document.createElement("div");
+      div.textContent = text || "\u200b";
+      return div;
+    }));
+    const el = mirror.lastChild;
+    hlTop = parseFloat(cs.borderTopWidth) + el.offsetTop;
+    hlHeight = el.offsetHeight;
+    return true;
+  }
+  function place() {
+    band.hidden = !hlShown;
+    if (!hlShown) return;
+    const top = hlTop - src.scrollTop;
+    band.style.transform = `translateY(${top}px)`;
+    band.style.height = hlHeight + "px";
+    // Keep the band inside the textarea's border when the line scrolls out.
+    band.style.clipPath = `inset(${Math.max(0, src.clientTop - top)}px 0 ${Math.max(0, top + hlHeight - src.clientTop - src.clientHeight)}px 0)`;
+  }
+  function highlight(line, reveal) {
+    hlLine = line;
+    hlShown = measure();
+    if (reveal && hlShown && (hlTop < src.scrollTop || hlTop + hlHeight > src.scrollTop + src.clientHeight)) {
+      src.scrollTop = Math.max(0, hlTop - src.clientHeight / 3);
+    }
+    place();
+  }
+  // The editor chose a line.
+  function fromEditor() {
+    const line = caretLine();
+    if (line !== hlLine) highlight(line);
+    if (!dirty) player.select(line); // after an edit, the player gets the line once it has the new text
+  }
+  ["keyup", "click", "focus"].forEach(ev => src.addEventListener(ev, fromEditor));
+  src.addEventListener("scroll", place);
+  // The player chose a row: move the caret there, unless someone is typing in the editor.
+  player.on("select", line => {
+    highlight(line, true);
+    if (line !== null && document.activeElement !== src) src.setSelectionRange(lineStart(line), lineStart(line));
+  });
+  if (window.ResizeObserver) new ResizeObserver(() => highlight(hlLine)).observe(src);
+
+  function play(text, keepStep) {
+    const model = player.load(text, keepStep);
+    dirty = false;
+    show(model);
+    // While someone types, the chosen line follows the caret; the line may have moved.
+    if (keepStep && document.activeElement === src) { highlight(caretLine()); player.select(hlLine); }
+    else highlight(null);
     say(`${model.total} messages across ${model.lanes.length} lanes.`);
     set(KEY, text);
     refreshLink(text);
@@ -173,6 +250,8 @@ h1 { margin: 0; font: 600 18px/1.25 var(--slp-sans); letter-spacing: -0.01em; ov
 
   let timer = null;
   src.addEventListener("input", () => {
+    dirty = true;
+    if (hlLine !== null) highlight(caretLine());
     clearTimeout(timer);
     timer = setTimeout(() => { if (!SwimlanesPlayer.isLink(src.value)) play(src.value, true); }, 450);
   });
@@ -230,6 +309,7 @@ h1 { margin: 0; font: 600 18px/1.25 var(--slp-sans); letter-spacing: -0.01em; ov
 
   function showEditor(on) {
     split.classList.toggle("no-editor", !on);
+    if (on) requestAnimationFrame(() => highlight(hlLine));
     toggle.textContent = on ? "Hide editor" : "Show editor";
     toggle.setAttribute("aria-pressed", String(!on));
     set(HIDE_KEY, on ? "" : "1");
